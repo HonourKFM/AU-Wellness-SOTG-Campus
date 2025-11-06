@@ -13,8 +13,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="AU Wellness">
-    <link rel="apple-touch-icon" href="icon.png"> <!-- You will need to create/upload an icon.png file -->
-    <link rel="icon" type="image/png" href="icon.png"> <!-- You will need to create/upload an icon.png file -->
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="icon" type="image/png" href="icon.png">
 
     <!-- TailwindCSS from CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -73,8 +73,6 @@ const formatCounselorId = (id) => {
 };
 
 // --- START OF constants.ts ---
-// IMPORTANT: You MUST replace this URL with your own deployed Google Apps Script URL.
-// See the README.md file for instructions on how to get this URL.
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwUM5nsCEoKDJMqmt_hlpeYX1DzBPY6WPC5XfOsN-57O5hBSdAH8710oT2C9GKW1VdL/exec';
 const ADMIN_PASSWORD = 'admin@sotg.pilot.fynex';
 
@@ -163,17 +161,10 @@ function useLocalStorage(key, initialValue) {
 
 // --- START OF services/geminiService.ts ---
 
-// IMPORTANT: You must get your own Gemini API Key for this to work on GitHub.
-// 1. Go to https://aistudio.google.com/app/apikey
-// 2. Create a new API key.
-// 3. Paste the key here.
-const GEMINI_API_KEY = ""; // <-- PASTE YOUR GEMINI API KEY HERE
+const GEMINI_API_KEY = ""; // Environment will populate this
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
 
 const generateInsights = async (data) => {
-  if (!GEMINI_API_KEY) {
-      return "AI Insights are disabled. Please add a Gemini API Key to `index.html` (line 120).";
-  }
   if (data.length === 0) {
     return "Not enough data to generate insights. Please add more student entries.";
   }
@@ -240,7 +231,7 @@ const generateInsights = async (data) => {
     }
   } catch (error) {
     console.error("Error generating insights from Gemini API:", error);
-    return `An error occurred while generating AI insights: ${error.message}`;
+    return "An error occurred while generating AI insights. Please check the console for details.";
   }
 };
 
@@ -622,18 +613,20 @@ const ClientForm = ({ onSubmit }) => {
         ),
 
         React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-6" },
+          // --- FORM PRIORITY CHANGE: College is now first and required ---
           React.createElement('div', null,
-            React.createElement('label', { htmlFor: "area", className: "block text-sm font-medium text-gray-700 mb-1" }, "Campus Location of Concern *"),
-            React.createElement('select', { id: "area", value: area, onChange: e => setArea(e.target.value), required: true, className: "w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-au-blue-dark" },
-              React.createElement('option', { value: "" }, "Select Location"),
-              CAMPUS_LOCATIONS.map(a => React.createElement('option', { key: a, value: a }, a))
+            React.createElement('label', { htmlFor: "college", className: "block text-sm font-medium text-gray-700 mb-1" }, "College / Faculty *"),
+            React.createElement('select', { id: "college", value: college, onChange: e => setCollege(e.target.value), required: true, className: "w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-au-blue-dark" },
+              React.createElement('option', { value: "" }, "Select College..."),
+              COLLEGES.map(c => React.createElement('option', { key: c, value: c }, c))
             )
           ),
+          // --- FORM PRIORITY CHANGE: Location is now second and optional ---
           React.createElement('div', null,
-            React.createElement('label', { htmlFor: "college", className: "block text-sm font-medium text-gray-700 mb-1" }, "College / Faculty (Optional)"),
-            React.createElement('select', { id: "college", value: college, onChange: e => setCollege(e.target.value), className: "w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-au-blue-dark" },
-              React.createElement('option', { value: "" }, "Not Applicable"),
-              COLLEGES.map(c => React.createElement('option', { key: c, value: c }, c))
+            React.createElement('label', { htmlFor: "area", className: "block text-sm font-medium text-gray-700 mb-1" }, "Location of Conversation (Optional)"),
+            React.createElement('select', { id: "area", value: area, onChange: e => setArea(e.target.value), className: "w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-au-blue-dark" },
+              React.createElement('option', { value: "" }, "Select Location"),
+              CAMPUS_LOCATIONS.map(a => React.createElement('option', { key: a, value: a }, a))
             )
           ),
            React.createElement('div', null,
@@ -896,22 +889,23 @@ const Dashboard = ({ allClientData, onExport }) => {
 
   const dashboardStats = useMemo(() => {
     if (allClientData.length === 0) {
-      return { total: 0, avgAge: 'N/A', topArea: 'N/A' };
+      return { total: 0, avgAge: 'N/A', topCollege: 'N/A' };
     }
     const validAges = allClientData.map(c => c.age).filter(age => age > 0);
     const totalAge = validAges.reduce((sum, age) => sum + age, 0);
     const avgAge = validAges.length > 0 ? Math.round(totalAge / validAges.length) : 'N/A';
     
-    const areaCounts = allClientData.reduce((acc, c) => {
-      if (c.area) acc[c.area] = (acc[c.area] || 0) + 1;
+    // --- DASHBOARD CHANGE: Track College instead of Area ---
+    const collegeCounts = allClientData.reduce((acc, c) => {
+      if (c.college) acc[c.college] = (acc[c.college] || 0) + 1;
       return acc;
     }, {});
-    const topArea = Object.keys(areaCounts).length > 0 ? Object.entries(areaCounts).sort((a,b) => b[1]-a[1])[0][0] : 'N/A';
+    const topCollege = Object.keys(collegeCounts).length > 0 ? Object.entries(collegeCounts).sort((a,b) => b[1]-a[1])[0][0] : 'N/A';
 
     return {
       total: allClientData.length,
       avgAge,
-      topArea,
+      topCollege, // Use topCollege
     };
   }, [allClientData]);
 
@@ -942,11 +936,13 @@ const Dashboard = ({ allClientData, onExport }) => {
       React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-6" },
         React.createElement(StatCard, { label: "Total Anonymous Reports", value: dashboardStats.total, size: "large" }),
         React.createElement(StatCard, { label: "Average Age (Est.)", value: dashboardStats.avgAge }),
-        React.createElement(StatCard, { label: "Top Concern Location", value: dashboardStats.topArea, color: "#6C757D" })
+        // --- DASHBOARD CHANGE: Show Top College ---
+        React.createElement(StatCard, { label: "Top College by Reports", value: dashboardStats.topCollege, color: "#6C757D" })
       ),
       React.createElement('div', { className: "grid grid-cols-1 lg:grid-cols-2 gap-6" },
         React.createElement(DataChart, { data: allClientData, dataKey: "concern", nameKey: "Reports", title: "Primary Concerns Distribution" }),
-        React.createElement(DataChart, { data: allClientData, dataKey: "area", nameKey: "Reports", title: "Concern Location Distribution" })
+        // --- DASHBOARD CHANGE: Show College Chart ---
+        React.createElement(DataChart, { data: allClientData, dataKey: "college", nameKey: "Reports", title: "College Distribution" })
       ),
       React.createElement(AllDataTable, { data: allClientData, onExport: onExport })
     )
